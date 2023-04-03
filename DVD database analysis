@@ -1,0 +1,141 @@
+-------------------------------------------------------------Creating a Function------------------------------------------------------------------------ 
+------------------------------function will be used to calculate the tax on the amounts from the payments table-----------------------------------------
+
+
+
+CREATE OR REPLACE FUNCTION tax_amount(amount numeric)
+RETURNS numeric(5,2)
+LANGUAGE plpgsql
+AS 
+$$
+DECLARE tax numeric(5,2);
+BEGIN 
+	SELECT amount *.089 INTO tax;
+	RETURN tax;
+END;
+$$
+;
+
+
+------------------------------------------------------Creating Detailed and Summary tables--------------------------------------------------------------
+
+
+
+CREATE TABLE detailed_table (
+	rental_id int,
+	film_id int,
+	title varchar(255),
+	category_name varchar(25),
+	payment_id int,
+	amount numeric(5,2),
+	amount_tax numeric(4,2),
+	total_amount numeric(5,2)
+);
+
+select* from detailed_table;  --shows empty detailed_table has been created
+
+CREATE TABLE summary_table (
+	category_name varchar(25),
+	total numeric(10,2),
+	num_of_payments int
+);
+
+select* from summary_table; --shows empty summary table has been created 
+
+
+--Populating the detailed and summary tables with data from the database
+
+INSERT INTO detailed_table
+	select R.rental_id,F.film_id, F.title, G.name AS category_name, P.payment_id, P.amount, tax_amount(P.amount) AS tax, P.amount + tax_amount(P.amount) AS total_amount
+	from payment P
+	left join rental R ON P.rental_id=R.rental_id
+	inner join inventory I ON R.inventory_id = I.inventory_id
+	inner join film F on F.film_id = I.film_id
+	inner join film_category C on C.film_id = F.film_id
+	inner join category G on C.category_id = G.category_id
+;	
+	
+select* from detailed_table; --shows data detailed_table has been populated with data
+
+
+INSERT INTO summary_table
+	SELECT category_name, SUM(total_amount) AS total, COUNT(payment_id) AS num_of_payments
+	FROM detailed_table
+	GROUP BY category_name
+	ORDER BY sum(amount) DESC	
+;
+
+select *
+from summary_table; --shows summary_report table has been populated with data 
+
+
+
+
+--------------------------------------------------------------Creating a Trigger------------------------------------------------------------------------
+-------------Trigger on the detailed table of the report will continually update the summary table as data is added to the detailed table.--------------
+
+
+
+CREATE OR REPLACE FUNCTION update_summary_fun()
+	RETURNS TRIGGER
+	LANGUAGE plpgsql
+AS $$
+BEGIN
+DELETE FROM summary_table;
+INSERT INTO summary_table
+	SELECT category_name, SUM(total_amount) AS total, COUNT(payment_id) AS num_of_payments
+	FROM detailed_table
+	GROUP BY category_name
+	ORDER BY sum(amount) DESC
+;
+RETURN NEW;
+END;
+$$
+;
+
+CREATE TRIGGER update_summary
+	AFTER INSERT
+	ON detailed_table
+	FOR EACH STATEMENT
+	EXECUTE PROCEDURE update_summary_fun()
+;
+
+select * from summary_table where category_name='Animation'
+;
+
+INSERT INTO detailed_table
+VALUES (16050, 23, 'Anaconda Confessions', 'Animation', 32099, 9.99, .89, 10.88)
+;
+select * from summary_table where category_name='Animation';
+--after a row was added to the detailed_report, summart_report automatically updated
+--total for 'Animation' category increased by 10.88, num_of_payments increased by 1 because one payment record was added to detailed_report
+
+
+-----------------------------------------------------Creating STORED PROCEDURE to refresh tables---------------------------------------------------------- 
+
+
+CREATE OR REPLACE PROCEDURE refresh_tables()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+DELETE FROM detailed_table;
+INSERT INTO detailed_table
+	select R.rental_id,F.film_id, F.title, G.name AS category_name, P.payment_id, P.amount, tax_amount(P.amount) AS tax, P.amount + tax_amount(P.amount) AS total_amount
+	from payment P
+	left join rental R ON P.rental_id=R.rental_id
+	inner join inventory I ON R.inventory_id = I.inventory_id
+	inner join film F on F.film_id = I.film_id
+	inner join film_category C on C.film_id = F.film_id
+	inner join category G on C.category_id = G.category_id
+;
+DELETE FROM summary_table;
+INSERT INTO summary_table
+	SELECT category_name, SUM(total_amount) AS total, COUNT(rental_id) AS num_of_payments
+	FROM detailed_table
+	GROUP BY category_name
+	ORDER BY sum(amount) DESC
+;
+RETURN;
+END;
+$$;
+
