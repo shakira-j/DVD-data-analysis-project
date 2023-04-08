@@ -66,7 +66,8 @@ INSERT INTO summary_table
 ;
 
 select *
-from summary_table; --shows summary_report table has been populated with data 
+from summary_table; --shows summary_report table has been populated with data
+---Summary table is used to directly answer the business question
 
 
 
