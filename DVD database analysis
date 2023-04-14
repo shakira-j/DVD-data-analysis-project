@@ -28,6 +28,7 @@ CREATE TABLE detailed_table (
 	film_id int,
 	title varchar(255),
 	category_name varchar(25),
+	store_id int,
 	payment_id int,
 	amount numeric(5,2),
 	amount_tax numeric(4,2),
@@ -48,7 +49,7 @@ select* from summary_table; --shows empty summary table has been created
 --Populating the detailed and summary tables with data from the database
 
 INSERT INTO detailed_table
-	select R.rental_id,F.film_id, F.title, G.name AS category_name, P.payment_id, P.amount, tax_amount(P.amount) AS tax, P.amount + tax_amount(P.amount) AS total_amount
+	select R.rental_id,F.film_id, F.title, G.name, I.store_id, P.payment_id, P.amount, tax_amount(P.amount) AS tax, P.amount + tax_amount(P.amount) AS total_amount
 	from payment P
 	left join rental R ON P.rental_id=R.rental_id
 	inner join inventory I ON R.inventory_id = I.inventory_id
